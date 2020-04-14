@@ -11,7 +11,7 @@ class Net(nn.Module):
         latent_dim: dim of latent space
         """
         super(Net, self).__init__()
-        self.mee = MEE(mod_dim, text_dim, latent_dim)
+        self.mee = MEE(mod_dim, text_dim, latent_dim, device)
 
     def forward(self, mod, ind, text_uniq):
         return self.mee(mod, ind, text_uniq)
@@ -19,9 +19,10 @@ class Net(nn.Module):
 
 class MEE(nn.Module):
 
-    def __init__(self, mod_dim, text_dim, latent_dim):
+    def __init__(self, mod_dim, text_dim, latent_dim, device):
         super(MEE, self).__init__()
 
+        self.device = device
         m = list(mod_dim.keys())
         self.m = m
 
@@ -41,6 +42,8 @@ class MEE(nn.Module):
 
         for i, l in enumerate(self.modalities_GU):
             mod[self.m[i]] = l(mod[self.m[i]])
+
+        #TODO: text_uniq is a dictionary, make a 48xw2v size tensor out of it
         text_uniq_embd = self.text_GU(text_uniq)
 
         text_uniq_count = len(text_uniq)
@@ -56,16 +59,16 @@ class MEE(nn.Module):
         available_m = np.zeros([bs, mod_count])
         for i, src in enumerate(self.m):
             available_m[:, i] = ind[src]
-        available_m = th.from_numpy(available_m).to(device)
+        available_m = th.from_numpy(available_m).to(self.device)
 
-        moe_weights = th.ones([text_uniq_count, mod_count]).to(device) * (1 / mod_count)  # potential bug
+        moe_weights = th.ones([text_uniq_count, mod_count]).to(self.device) * (1 / mod_count)  # potential bug
 
         moe_weights = available_m[None, :, :] * moe_weights[:, None, :]
         norm_weights = th.sum(moe_weights, dim=2)
         norm_weights = norm_weights.unsqueeze(2)
         moe_weights = th.div(moe_weights, norm_weights)
 
-        sim_matrix = th.zeros(text_uniq_count, bs)
+        sim_matrix = th.zeros(text_uniq_count, bs) #potential bug: explicity put to device?
         for i, src in enumerate(self.m):
             mod[src] = mod[src].transpose(0, 1)
             sim_matrix += moe_weights[:, :, i] * th.matmul(text_uniq_embd, mod[src])  # potential bug
