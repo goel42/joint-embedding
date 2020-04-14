@@ -3,8 +3,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 
+
 class Net(nn.Module):
-    def __init__(self, mod_dim, text_dim, latent_dim):
+    def __init__(self, mod_dim, text_dim, latent_dim, device):
         """
         mod_dim: dictionary containing dims of different modalities/sources
         txt_dim: dim of word2vec
@@ -43,14 +44,14 @@ class MEE(nn.Module):
         for i, l in enumerate(self.modalities_GU):
             mod[self.m[i]] = l(mod[self.m[i]])
 
-        #TODO: text_uniq is a dictionary, make a 48xw2v size tensor out of it
+        # TODO: verify dims a 48xw2v
         text_uniq_embd = self.text_GU(text_uniq)
 
         text_uniq_count = len(text_uniq)
         assert len(text_uniq) == len(text_uniq_embd)
 
-        mod_count = len(ind) == len(mod)
-        assert len(self.m) == mod_count
+        mod_count = len(ind)
+        assert len(self.m) == mod_count == len(mod)
 
         bs = len(ind[self.m[0]])
         for src in self.m:
@@ -68,7 +69,7 @@ class MEE(nn.Module):
         norm_weights = norm_weights.unsqueeze(2)
         moe_weights = th.div(moe_weights, norm_weights)
 
-        sim_matrix = th.zeros(text_uniq_count, bs) #potential bug: explicity put to device?
+        sim_matrix = th.zeros(text_uniq_count, bs)  # potential bug: explicity put to device?
         for i, src in enumerate(self.m):
             mod[src] = mod[src].transpose(0, 1)
             sim_matrix += moe_weights[:, :, i] * th.matmul(text_uniq_embd, mod[src])  # potential bug

@@ -77,6 +77,17 @@ class Breakfast(Dataset):
         self.word2vecs = load_word2vec()
         self.labels_uniq = self.__get_uniq_labels__(map_path, rm_SIL)
 
+    def __len__(self):
+        return len(self.data["labels_idx"])
+
+    def __getitem__(self, idx):
+        d = dict()
+        for src in self.sources:
+            d[src] = self.data[src][idx]
+            d[src+"_ind"] = self.data[src+"_ind"][idx]
+        d["labels_idx"] = self.data["labels_idx"][idx]
+        return d
+
     def __get_data__(self, mod_dir_path, label_dir_path, rm_SIL):
         aggr_data = {}
         for src in self.sources:
