@@ -57,10 +57,10 @@ class MEE(nn.Module):
         for src in self.m:
             assert bs == len(ind[src]) == len(mod[src])
 
-        available_m = np.zeros([bs, mod_count])
+        available_m = th.zeros([bs, mod_count]).to(self.device)
         for i, src in enumerate(self.m):
             available_m[:, i] = ind[src]
-        available_m = th.from_numpy(available_m).to(self.device)
+        # available_m = th.from_numpy(available_m).to(self.device)
 
         moe_weights = th.ones([text_uniq_count, mod_count]).to(self.device) * (1 / mod_count)  # potential bug
 
@@ -69,7 +69,7 @@ class MEE(nn.Module):
         norm_weights = norm_weights.unsqueeze(2)
         moe_weights = th.div(moe_weights, norm_weights)
 
-        sim_matrix = th.zeros(text_uniq_count, bs)  # potential bug: explicity put to device?
+        sim_matrix = th.zeros(text_uniq_count, bs).to(self.device)  # potential bug: explicity put to device?
         for i, src in enumerate(self.m):
             mod[src] = mod[src].transpose(0, 1)
             sim_matrix += moe_weights[:, :, i] * th.matmul(text_uniq_embd, mod[src])  # potential bug

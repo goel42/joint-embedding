@@ -9,9 +9,7 @@ import random
 from torch.utils.tensorboard import SummaryWriter
 from argparser import parser
 import time
-from sklearn.metrics import confusion_matrix
 import sys
-import pandas as pd
 from Breakfast import Breakfast as BF
 import utils
 
@@ -27,9 +25,11 @@ random.seed(args.seed)
 visual_feat_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\data_maxpool_splits\split1"
 text_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\groundTruth_maxpool_clean_splits\split1"
 map_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\splits\mapping_clean.txt"
-log_path = r"C:\Users\dcsang\PycharmProjects\embedding\MEE-BF-SingleSrc\logs"
+log_path = r"C:\Users\dcsang\PycharmProjects\joint-embedding\logs"
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
+
+running_loss_iter = 0
 
 
 ########################GLOBAL########################################
@@ -37,13 +37,15 @@ device = th.device("cuda" if th.cuda.is_available() else "cpu")
 def get_accuracy(groundtruth, prediction):
     groundtruth = np.array(groundtruth)
     prediction = np.array(prediction)
+    print("Length: ", len(groundtruth), len(prediction))
+    # for g, p in zip(groundtruth, prediction):
+    #     print(g, p)
+
     return np.sum(prediction == groundtruth) / float(len(groundtruth))
 
 
-running_loss_iter = 0
-
-
-def train(net, optimizer, max_margin, train_dataloader, sources, labels_uniq_w2v, dataset_size, epoch, writer):
+def train(net, optimizer, max_margin, train_dataloader, sources, labels_uniq_w2v, dataset_size, epoch, writer, stoi_map,
+          itos_map):
     print("Starting Training Loop for Epoch: " + str(epoch + 1))
     net.train()
 
@@ -58,18 +60,22 @@ def train(net, optimizer, max_margin, train_dataloader, sources, labels_uniq_w2v
         for src in sources:
             mod[src] = sample_batched[src].float().to(device)
             mod_ind[src] = sample_batched[src + "_ind"].float().to(device)
+            # mask = mod_ind[src] != 0
+            # mod[src] = mod[src][mask]
+            # mod_ind[src] = mod_ind[src][mask]
         # TODO: stereo02?
 
         optimizer.zero_grad()
 
         similarity_matrix = net(mod, mod_ind, labels_uniq_w2v)  # TODO #TODO: verify dims: uniq_count x Batch size
-        similarity_matrix = similarity_matrix.transpose(0,1)  # potential bug #TODO: verify dims: Batch Size xuniq_count
-        curr_pred_idx = similarity_matrix.numpy().argmin(axis=1)
+        similarity_matrix = similarity_matrix.transpose(0,
+                                                        1)  # potential bug #TODO: verify dims: Batch Size xuniq_count
+        curr_pred_idx = similarity_matrix.argmax(axis=1)
         curr_gt_idx = sample_batched["labels_idx"]
         gt.extend(curr_gt_idx.tolist())
         pred.extend(curr_pred_idx.tolist())
 
-        loss = max_margin(similarity_matrix,curr_gt_idx)
+        loss = max_margin(similarity_matrix, curr_gt_idx)
         # TODO: need to reimplement this loss fn. similarity matrix needs to be transposed,
         loss.backward()
         optimizer.step()
@@ -80,25 +86,56 @@ def train(net, optimizer, max_margin, train_dataloader, sources, labels_uniq_w2v
                                                                          args.train_batch_size * float(
                                                                              i_batch) / dataset_size,
                                                                          running_loss / args.n_display))
+            global running_loss_iter
             running_loss_iter += 1
             writer.add_scalar('Running loss', running_loss, running_loss_iter)
             running_loss = 0.0
-
-    accuracy = get_accuracy(gt, pred)
+    accuracy = get_accuracy(gt, pred) * 100
+    # cm = utils.get_confusion_matrix(gt, pred, stoi_map,itos_map)
+    # print(cm)
     print("Epoch %d, Training Accuracy: %.7f" % (epoch + 1, accuracy))
-    writer.add_scalar("Training Accuracy per epoch", accuracy * 100, epoch + 1)
+    writer.add_scalar("Training Accuracy per epoch", accuracy, epoch + 1)
+    return accuracy
 
 
-# def test():
-#     net.eval()
+def test(net, dataloader, sources, labels_uniq_w2v, dataset_size, epoch, writer, stoi_map, itos_map):
+    print("Evaluating Epoch: %d" % (epoch + 1))
+    net.eval()
+
+    gt = []
+    pred = []
+
+    labels_uniq_w2v = th.Tensor(labels_uniq_w2v).to(device)
+    for i_batch, sample_batched in enumerate(dataloader):
+        mod = {}
+        mod_ind = {}
+        for src in sources:
+            mod[src] = sample_batched[src].float().to(device)
+            mod_ind[src] = sample_batched[src + "_ind"].float().to(device)
+
+        similarity_matrix = net(mod, mod_ind, labels_uniq_w2v)  # TODO #TODO: verify dims: uniq_count x Batch size
+        similarity_matrix = similarity_matrix.transpose(0,
+                                                        1)  # potential bug #TODO: verify dims: Batch Size xuniq_count
+        curr_pred_idx = similarity_matrix.argmax(axis=1)
+        curr_gt_idx = sample_batched["labels_idx"]
+        gt.extend(curr_gt_idx.tolist())
+        pred.extend(curr_pred_idx.tolist())
+        # DEBUG
+        print(labels_uniq_w2v.requires_grad, similarity_matrix.requires_grad, )
+    accuracy = get_accuracy(gt, pred) * 100
+    print("Test Accuracy: %.7f" % accuracy)
+    writer.add_scalar("Test Accuracy per epoch", accuracy, epoch + 1)
+    return accuracy
 
 
 def main():
-    # TODO: Hyper-param tuning code here. Ensure this block is before utils.print_hyperparams() fn call
-    # TODO: in hyperparameter tuning code, make sure you change val of args.X so that correct values printed in tensorboard with print_hyperparams fn
+    # TODO: Hyper-param tuning code here. Ensure this block is before utils.print_hyperparams() fn call TODO: in
+    #  hyperparameter tuning code, make sure you change val of args.X so that correct values printed in tensorboard
+    #  with print_hyperparams fn
 
     # sources =  ["cam01", "cam02", "webcam01", "webcam02", "stereo01", "stereo02"]
     sources = ["cam01", "cam02", "webcam01", "webcam02", "stereo01"]  # TODO: try with stereo02
+    # sources = ["cam01"]
     activities = ['cereals', 'coffee', 'friedegg', 'juice', 'milk', 'pancake', 'salat', 'sandwich', 'scrambledegg',
                   'tea']
     train_persons = ["P" + str(num) for num in range(16, 54)]
@@ -140,8 +177,17 @@ def main():
 
     # TODO: define scheduler here
 
+    best_train_accu, best_test_accu, best_epoch = -np.inf, -np.inf, -np.inf
     for epoch in range(args.epochs):
-        train(net, optimizer, max_margin, train_dataloader, sources, train_uniq_w2v, train_dataset_size, epoch, writer)
+        train_accu = train(net, optimizer, max_margin, train_dataloader, sources, train_uniq_w2v, train_dataset_size,
+                           epoch, writer, train_dataset.stoi_map, train_dataset.itos_map)
+        # print(list(net.parameters()))
+        test_accu = test(net, test_dataloader, sources, test_uniq_w2v, test_dataset_size, epoch, writer,
+                         test_dataset.stoi_map, test_dataset.itos_map)
+        if test_accu > best_test_accu:
+            best_train_accu, best_test_accu, best_epoch = train_accu, test_accu, epoch + 1
+
+    print("Best Train Accuracy: %.7f Test Accuracy: %.7f (Epoch: %d)" % (best_train_accu, best_test_accu, best_epoch))
 
 
 # sim matrix here is transpose of original code. beware

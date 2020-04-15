@@ -16,13 +16,14 @@ class MaxMarginRankingLoss(nn.Module):
 
         assert len(conf_matrix) == len(gt_idx)
         row_idx = np.arange(n[0])
-        sii = conf_matrix[row_idx,gt_idx]
+        gt_idx_n = gt_idx.numpy()
+        sii = conf_matrix[row_idx,gt_idx_n]
 
         sii = sii.unsqueeze(1)  # TODO: dims should be batch_size x 1
         sii = sii.expand(n)  # TODO: dims should be batch_size x num_uniq_text # must have dims of conf_matrix
         sii = sii.contiguous().view(-1, 1)
 
-        sij = conf_matrix.view(-1, 1)
+        sij = conf_matrix.contiguous().view(-1, 1) #potential bug. why add contiguous? (not in MEE-single src code)
 
         max_margin = F.relu(self.margin - (sii - sij))
 
