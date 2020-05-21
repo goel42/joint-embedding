@@ -22,8 +22,8 @@ th.manual_seed(args.seed)
 np.random.seed(args.seed)
 random.seed(args.seed)
 
-visual_feat_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\data_maxpool_splits\split1"
-text_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\groundTruth_maxpool_clean_splits\split1"
+visual_feat_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\data_maxpool_splits"
+text_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\groundTruth_maxpool_clean_splits"
 map_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\splits\mapping_clean.txt"
 log_path = r"C:\Users\dcsang\PycharmProjects\joint-embedding\logs"
 
@@ -105,41 +105,34 @@ def test(net, dataloader, sources, labels_uniq_w2v, dataset_size, epoch, writer,
     gt = []
     pred = []
 
-    labels_uniq_w2v = th.Tensor(labels_uniq_w2v).to(device)
-    for i_batch, sample_batched in enumerate(dataloader):
-        mod = {}
-        mod_ind = {}
-        for src in sources:
-            mod[src] = sample_batched[src].float().to(device)
-            mod_ind[src] = sample_batched[src + "_ind"].float().to(device)
+    with th.no_grad():
+        labels_uniq_w2v = th.Tensor(labels_uniq_w2v).to(device)
+        for i_batch, sample_batched in enumerate(dataloader):
+            mod = {}
+            mod_ind = {}
+            for src in sources:
+                mod[src] = sample_batched[src].float().to(device)
+                mod_ind[src] = sample_batched[src + "_ind"].float().to(device)
 
-        similarity_matrix = net(mod, mod_ind, labels_uniq_w2v)  # TODO #TODO: verify dims: uniq_count x Batch size
-        similarity_matrix = similarity_matrix.transpose(0,
-                                                        1)  # potential bug #TODO: verify dims: Batch Size xuniq_count
-        curr_pred_idx = similarity_matrix.argmax(axis=1)
-        curr_gt_idx = sample_batched["labels_idx"]
-        gt.extend(curr_gt_idx.tolist())
-        pred.extend(curr_pred_idx.tolist())
-        # DEBUG
-        print(labels_uniq_w2v.requires_grad, similarity_matrix.requires_grad, )
+            similarity_matrix = net(mod, mod_ind, labels_uniq_w2v)  # TODO #TODO: verify dims: uniq_count x Batch size
+            similarity_matrix = similarity_matrix.transpose(0,
+                                                            1)  # potential bug #TODO: verify dims: Batch Size xuniq_count
+            curr_pred_idx = similarity_matrix.argmax(axis=1)
+            curr_gt_idx = sample_batched["labels_idx"]
+            gt.extend(curr_gt_idx.tolist())
+            pred.extend(curr_pred_idx.tolist())
+            # # DEBUG
+            # print(labels_uniq_w2v.requires_grad, similarity_matrix.requires_grad, )
     accuracy = get_accuracy(gt, pred) * 100
     print("Test Accuracy: %.7f" % accuracy)
     writer.add_scalar("Test Accuracy per epoch", accuracy, epoch + 1)
     return accuracy
 
 
-def main():
+def splits(sources, activities, train_persons, test_persons):
     # TODO: Hyper-param tuning code here. Ensure this block is before utils.print_hyperparams() fn call TODO: in
     #  hyperparameter tuning code, make sure you change val of args.X so that correct values printed in tensorboard
     #  with print_hyperparams fn
-
-    # sources =  ["cam01", "cam02", "webcam01", "webcam02", "stereo01", "stereo02"]
-    sources = ["cam01", "cam02", "webcam01", "webcam02", "stereo01"]  # TODO: try with stereo02
-    # sources = ["cam01"]
-    activities = ['cereals', 'coffee', 'friedegg', 'juice', 'milk', 'pancake', 'salat', 'sandwich', 'scrambledegg',
-                  'tea']
-    train_persons = ["P" + str(num) for num in range(16, 54)]
-    test_persons = ["P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15"]
 
     train_dataset = BF(os.path.join(visual_feat_path, "train"), os.path.join(text_path, "train"), map_path, sources,
                        activities, train_persons, rm_SIL=True)
@@ -176,6 +169,7 @@ def main():
         optimizer = optim.SGD(net.parameters(), lr=args.lr, momentum=args.momentum)
 
     # TODO: define scheduler here
+    # learning rate scheduler
 
     best_train_accu, best_test_accu, best_epoch = -np.inf, -np.inf, -np.inf
     for epoch in range(args.epochs):
@@ -184,14 +178,52 @@ def main():
         # print(list(net.parameters()))
         test_accu = test(net, test_dataloader, sources, test_uniq_w2v, test_dataset_size, epoch, writer,
                          test_dataset.stoi_map, test_dataset.itos_map)
-        if test_accu > best_test_accu:
+        if (test_accu - best_test_accu > 0.05) and (epoch < 155):
             best_train_accu, best_test_accu, best_epoch = train_accu, test_accu, epoch + 1
 
     print("Best Train Accuracy: %.7f Test Accuracy: %.7f (Epoch: %d)" % (best_train_accu, best_test_accu, best_epoch))
 
 
-# sim matrix here is transpose of original code. beware
-# learning rate scheduler
+def main():
+    # sources =  ["cam01", "cam02", "webcam01", "webcam02", "stereo01", "stereo02"]
+    sources = ["cam01", "cam02", "webcam01", "webcam02", "stereo01"]  # TODO: try with stereo02
+    # sources = ["cam01"]
+    activities = ['cereals', 'coffee', 'friedegg', 'juice', 'milk', 'pancake', 'salat', 'sandwich', 'scrambledegg',
+                  'tea']
+    all_persons = ["P03", "P04", "P05", "P06", "P07", "P08", "P09"]
+    all_persons += ["P" + str(num) for num in range(10, 54)]
+
+    split = "split2"
+    global visual_feat_path
+    global text_path
+
+    if split == "split1":
+        # train_persons = ["P" + str(num) for num in range(16, 54)]
+        test_persons = ["P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15"]
+        train_persons = [p for p in all_persons if p not in test_persons]
+        visual_feat_path = os.path.join(visual_feat_path, split)
+        text_path = os.path.join(text_path, split)
+    elif split == "split2":
+        test_persons = ["P" + str(num) for num in range(16, 29)]
+        train_persons = [p for p in all_persons if p not in test_persons]
+        visual_feat_path = os.path.join(visual_feat_path, split)
+        text_path = os.path.join(text_path, split)
+    elif split == "split3":
+        test_persons = ["P" + str(num) for num in range(29, 42)]
+        train_persons = [p for p in all_persons if p not in test_persons]
+        visual_feat_path = os.path.join(visual_feat_path, split)
+        text_path = os.path.join(text_path, split)
+    elif split == "split4":
+        test_persons = ["P" + str(num) for num in range(42, 54)]
+        train_persons = [p for p in all_persons if p not in test_persons]
+        visual_feat_path = os.path.join(visual_feat_path, split)
+        text_path = os.path.join(text_path, split)
+
+    print(test_persons)
+    print(train_persons)
+
+    splits(sources, activities, train_persons, test_persons)
+
 
 if __name__ == '__main__':
     main()
