@@ -62,7 +62,7 @@ def is_src_sync(data):
 
 class Breakfast(Dataset):
 
-    def __init__(self, mod_dir_path, label_dir_path, map_path, sources, activities, persons, rm_SIL=True):
+    def __init__(self, mod_dir_path, label_dir_path, map_path, sources, activities, persons, rm_SIL=False):
         self.sources = sources
         self.activities = activities
         self.persons = persons
@@ -70,11 +70,12 @@ class Breakfast(Dataset):
         self.stoi_map = __get_map__(map_path)
         self.itos_map = __get_map__(map_path, inv=True)
 
-        self.mod_dim = dict([(src, 400) for src in self.sources]) #change
+        self.mod_dim = dict([(src, 1024) for src in self.sources]) #change
         self.data = self.__get_data__(mod_dir_path, label_dir_path, rm_SIL)
 
         self.word2vecs = load_word2vec()
         self.labels_uniq = self.__get_uniq_labels__(map_path, rm_SIL)
+        # print("BLAH")
 
     def __len__(self):
         return len(self.data["labels_idx"])
@@ -135,7 +136,7 @@ class Breakfast(Dataset):
         if if rm_SIL == False (i.e. SILs not removed), then labels are already 0-indexed
         """
 
-        file_name = person + "_" + src + "_" + person + "_" + activity
+        file_name = person + "_" + activity + "_" + src
         mod_file = file_name + ".npy"
         mod_path = os.path.join(mod_dir_path, mod_file)
 

@@ -23,9 +23,9 @@ np.random.seed(args.seed)
 random.seed(args.seed)
 
 visual_feat_path = r"C:\Users\dcsang\PycharmProjects\embedding\cmu-kitchen-capture\features_maxpool\Brownie"
-text_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\groundTruth_maxpool_clean_splits"
-map_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\splits\mapping_clean.txt"
-log_path = r"C:\Users\dcsang\PycharmProjects\joint-embedding\logs"
+text_path = r"C:\Users\dcsang\PycharmProjects\embedding\cmu-kitchen-capture\groundtruth_maxpool\Brownie"
+map_path = r"C:\Users\dcsang\PycharmProjects\embedding\cmu-kitchen-capture\mapping_Brownie.txt"
+log_path = r"C:\Users\dcsang\PycharmProjects\embedding\cmu-kitchen-capture\logs"
 
 device = th.device("cuda" if th.cuda.is_available() else "cpu")
 
@@ -33,6 +33,26 @@ running_loss_iter = 0
 
 
 ########################GLOBAL########################################
+def get_person_helper(path):
+    all_files = os.listdir(path)
+    persons = [file.split("_")[0] for file in all_files]
+    persons = list(set(persons))
+    return persons
+
+
+def get_persons(path1, path2):
+    persons_from_gt = get_person_helper(path1)
+    persons_from_feats = get_person_helper(path2)
+    return list(set(persons_from_feats) & set(persons_from_gt))
+
+
+def get_sources(path):
+    all_files = os.listdir(path)
+    sources = [file.split("_")[2].split(".")[0] for file in all_files]
+    sources = list(set(sources))
+
+    return sources
+
 
 def get_accuracy(groundtruth, prediction):
     groundtruth = np.array(groundtruth)
@@ -134,13 +154,14 @@ def splits(sources, activities, train_persons, test_persons):
     #  hyperparameter tuning code, make sure you change val of args.X so that correct values printed in tensorboard
     #  with print_hyperparams fn
 
-    train_dataset = BF(os.path.join(visual_feat_path, "train"), os.path.join(text_path, "train"), map_path, sources,
-                       activities, train_persons, rm_SIL=True)
+    train_dataset = BF(visual_feat_path, text_path, map_path, sources,
+                       activities, train_persons, rm_SIL=False)
     train_dataloader = DataLoader(train_dataset, batch_size=args.train_batch_size, shuffle=True, num_workers=0)
 
-    test_dataset = BF(os.path.join(visual_feat_path, "test"), os.path.join(text_path, "test"), map_path, sources,
-                      activities, test_persons, rm_SIL=True)
+    test_dataset = BF(visual_feat_path, text_path, map_path, sources,
+                      activities, test_persons, rm_SIL=False)
     test_dataloader = DataLoader(test_dataset, batch_size=args.test_batch_size, shuffle=False, num_workers=0)
+
 
     # w2v of numbers or text?
     train_uniq_w2v = train_dataset.labels_uniq["labels_num_w2v"]
@@ -151,6 +172,9 @@ def splits(sources, activities, train_persons, test_persons):
     print("Size of training", train_dataset_size)
     test_dataset_size = len(test_dataset)
     print("Size of testing", len(test_dataset))
+
+    if not os.path.exists(log_path):
+        os.makedirs(log_path)
 
     log_dir = str(int(time.time()))
     writer = SummaryWriter(os.path.join(log_path, log_dir))
@@ -185,42 +209,45 @@ def splits(sources, activities, train_persons, test_persons):
 
 
 def main():
-    # sources =  ["cam01", "cam02", "webcam01", "webcam02", "stereo01", "stereo02"]
-    sources = ["cam01", "cam02", "webcam01", "webcam02", "stereo01"]  # TODO: try with stereo02
-    # sources = ["cam01"]
-    activities = ['cereals', 'coffee', 'friedegg', 'juice', 'milk', 'pancake', 'salat', 'sandwich', 'scrambledegg',
-                  'tea']
-    all_persons = ["P03", "P04", "P05", "P06", "P07", "P08", "P09"]
-    all_persons += ["P" + str(num) for num in range(10, 54)]
-
-    split = "split2"
     global visual_feat_path
     global text_path
 
+    # sources =  ["cam01", "cam02", "webcam01", "webcam02", "stereo01", "stereo02"]
+    # sources = ["7150991", "7151020", "7151062", "8421130", "6510211"]  # TODO: try with stereo02
+    # sources = ["cam01"]
+    activities = ["Brownie"]
+    # all_persons = ["P03", "P04", "P05", "P06", "P07", "P08", "P09"]
+    # all_persons += ["P" + str(num) for num in range(10, 54)]
+    all_persons = get_persons(text_path, visual_feat_path)
+    sources = get_sources(text_path)
+
+    split = "split1"
+
     if split == "split1":
         # train_persons = ["P" + str(num) for num in range(16, 54)]
-        test_persons = ["P03", "P04", "P05", "P06", "P07", "P08", "P09", "P10", "P11", "P12", "P13", "P14", "P15"]
+        test_persons = ["S37", "S41"]
         train_persons = [p for p in all_persons if p not in test_persons]
-        visual_feat_path = os.path.join(visual_feat_path, split)
-        text_path = os.path.join(text_path, split)
-    elif split == "split2":
-        test_persons = ["P" + str(num) for num in range(16, 29)]
-        train_persons = [p for p in all_persons if p not in test_persons]
-        visual_feat_path = os.path.join(visual_feat_path, split)
-        text_path = os.path.join(text_path, split)
-    elif split == "split3":
-        test_persons = ["P" + str(num) for num in range(29, 42)]
-        train_persons = [p for p in all_persons if p not in test_persons]
-        visual_feat_path = os.path.join(visual_feat_path, split)
-        text_path = os.path.join(text_path, split)
-    elif split == "split4":
-        test_persons = ["P" + str(num) for num in range(42, 54)]
-        train_persons = [p for p in all_persons if p not in test_persons]
-        visual_feat_path = os.path.join(visual_feat_path, split)
-        text_path = os.path.join(text_path, split)
 
-    print(test_persons)
-    print(train_persons)
+        # visual_feat_path = os.path.join(visual_feat_path, split)
+        # text_path = os.path.join(text_path, split)
+    # elif split == "split2":
+    #     test_persons = ["P" + str(num) for num in range(16, 29)]
+    #     train_persons = [p for p in all_persons if p not in test_persons]
+    #     visual_feat_path = os.path.join(visual_feat_path, split)
+    #     text_path = os.path.join(text_path, split)
+    # elif split == "split3":
+    #     test_persons = ["P" + str(num) for num in range(29, 42)]
+    #     train_persons = [p for p in all_persons if p not in test_persons]
+    #     visual_feat_path = os.path.join(visual_feat_path, split)
+    #     text_path = os.path.join(text_path, split)
+    # elif split == "split4":
+    #     test_persons = ["P" + str(num) for num in range(42, 54)]
+    #     train_persons = [p for p in all_persons if p not in test_persons]
+    #     visual_feat_path = os.path.join(visual_feat_path, split)
+    #     text_path = os.path.join(text_path, split)
+
+    print("Test: ", test_persons)
+    print("Train: ", train_persons)
 
     splits(sources, activities, train_persons, test_persons)
 
