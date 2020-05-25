@@ -22,7 +22,7 @@ th.manual_seed(args.seed)
 np.random.seed(args.seed)
 random.seed(args.seed)
 
-visual_feat_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\data_maxpool_splits"
+visual_feat_path = r"C:\Users\dcsang\PycharmProjects\embedding\cmu-kitchen-capture\features_maxpool\Brownie"
 text_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\groundTruth_maxpool_clean_splits"
 map_path = r"C:\Users\dcsang\PycharmProjects\embedding\breakfast\Breakfast_fs\splits\mapping_clean.txt"
 log_path = r"C:\Users\dcsang\PycharmProjects\joint-embedding\logs"
