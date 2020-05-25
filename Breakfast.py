@@ -3,7 +3,6 @@ import os
 from torch.utils.data import Dataset
 import sys
 
-sys.path.insert(1, r'C:\Users\dcsang\PycharmProjects\feedfwdBF')
 from word2vec.word2vec import load_word2vec
 
 # SIL must not be used. because text_uniq index 0 contains label 1
@@ -71,7 +70,7 @@ class Breakfast(Dataset):
         self.stoi_map = __get_map__(map_path)
         self.itos_map = __get_map__(map_path, inv=True)
 
-        self.mod_dim = dict([(src, 400) for src in self.sources])
+        self.mod_dim = dict([(src, 400) for src in self.sources]) #change
         self.data = self.__get_data__(mod_dir_path, label_dir_path, rm_SIL)
 
         self.word2vecs = load_word2vec()
