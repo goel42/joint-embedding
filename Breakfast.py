@@ -3,7 +3,7 @@ import os
 from torch.utils.data import Dataset
 import sys
 
-sys.path.insert(1, r'C:\Users\dcsang\PycharmProjects\feedfwdBF')
+# sys.path.insert(1, r'C:\Users\dcsang\PycharmProjects\feedfwdBF')
 from word2vec.word2vec import load_word2vec
 
 # SIL must not be used. because text_uniq index 0 contains label 1
