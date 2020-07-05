@@ -1,2 +1,3 @@
+__pycache__/
 /word2vec/vectors_200d.txt
 /logs/
